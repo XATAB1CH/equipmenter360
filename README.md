@@ -50,7 +50,7 @@ Backend/                Go-сервер
   Dockerfile            multi-stage сборка бэкенда (+ статика фронта)
 ```
 
-Архитектура бэкенда — упрощённый вариант слоёв Garnet: `httpserver → service → store (интерфейс) ← domain`.
+Архитектура бэкенда: `httpserver → service → store (интерфейс) ← domain`.
 
 ## API
 
