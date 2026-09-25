@@ -1,0 +1,12 @@
+{
+  "title": "Монтаж 360",
+  "language": "ru",
+  "description": "Система управления нарядами для монтажных бригад: создание и назначение нарядов, отслеживание статусов и отчёты.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

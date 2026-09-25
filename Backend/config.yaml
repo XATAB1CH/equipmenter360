@@ -1,0 +1,18 @@
+# Конфигурация сервера «Монтаж 360».
+# Значения можно переопределять переменными окружения через ${VAR:default}.
+
+server:
+  addr: ${ADDR::8080}              # адрес HTTP-сервера
+  staticDir: ${STATIC_DIR:../Frontend/dist}  # папка со собранным фронтендом
+  openapiSpec: ${OPENAPI_SPEC:api/oapi.yaml} # путь к OpenAPI-контракту
+
+database:
+  host: ${DB_HOST:localhost}
+  # Внешний порт docker-контейнера (5433), а не внутренний 5432 —
+  # чтобы не конфликтовать с локальным Postgres на 5432.
+  port: ${DB_PORT:5433}
+  user: ${DB_USER:montazh}
+  password: ${DB_PASSWORD:montazh}
+  dbname: ${DB_NAME:montazh360}
+  sslmode: ${DB_SSLMODE:disable}
+  poolMaxConns: ${DB_POOL_MAX_CONNS:10}

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: montazh360-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-montazh}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-montazh}
+      POSTGRES_DB: ${DB_NAME:-montazh360}
+    ports:
+      # Наружу — 5433, чтобы не конфликтовать с локальным Postgres на 5432.
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-montazh} -d $${POSTGRES_DB:-montazh360}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db-data:

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(cd /Users/antondemidov/Desktop/Garnet_local/actions && echo \"########## controller/products/controller.go ##########\" && cat internal/api/controller/products/controller.go && echo \"\" && echo \"########## pkg/domains/products/models.go ##########\" && head -70 pkg/domains/products/models.go && echo \"\" && echo \"########## pkg/domains/errors.go ##########\" && cat pkg/domains/errors.go)",
+      "Read(//Users/antondemidov/Desktop/Garnet_local/actions/**)"
+    ]
+  }
+}
