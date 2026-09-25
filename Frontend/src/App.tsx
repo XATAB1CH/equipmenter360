@@ -833,13 +833,20 @@ let toastCounter = 0;
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
   const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [workTypes, setWorkTypes] = useState<string[]>([]);
+  const [technicians, setTechnicians] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Первичная загрузка нарядов (пока из моков, потом — GET /api/orders).
+  // Первичная загрузка нарядов и справочников (GET /api/orders, GET /api/meta).
   useEffect(() => {
     let cancelled = false;
-    listOrders().then(data => { if (!cancelled) setOrders(data); });
+    listOrders()
+      .then(data => { if (!cancelled) setOrders(data); })
+      .catch(err => showToast(`Не удалось загрузить наряды: ${err.message}`, 'error'));
+    getMeta()
+      .then(m => { if (!cancelled) { setWorkTypes(m.workTypes); setTechnicians(m.technicians); } })
+      .catch(err => showToast(`Не удалось загрузить справочники: ${err.message}`, 'error'));
     return () => { cancelled = true; };
   }, []);
 
@@ -858,11 +865,13 @@ export default function App() {
   }
 
   function handleCreate(data: NewOrder) {
-    createOrder(data).then(created => {
-      setOrders(o => [created, ...o]);
-      setScreen('list');
-      showToast(`Наряд #${created.id} создан`, 'success');
-    });
+    createOrder(data)
+      .then(created => {
+        setOrders(o => [created, ...o]);
+        setScreen('list');
+        showToast(`Наряд #${created.id} создан`, 'success');
+      })
+      .catch(err => showToast(`Не удалось создать наряд: ${err.message}`, 'error'));
   }
 
   function handleDetail(id: string) {
@@ -871,9 +880,11 @@ export default function App() {
   }
 
   function handleUpdate(id: string, updates: Partial<WorkOrder>) {
-    updateOrder(id, updates).then(updated => {
-      if (updated) setOrders(o => o.map(order => order.id === id ? updated : order));
-    });
+    updateOrder(id, updates)
+      .then(updated => {
+        if (updated) setOrders(o => o.map(order => order.id === id ? updated : order));
+      })
+      .catch(err => showToast(`Не удалось обновить наряд: ${err.message}`, 'error'));
   }
 
   const selectedOrder = orders.find(o => o.id === selectedId);
@@ -891,6 +902,7 @@ export default function App() {
       )}
       {screen === 'create' && (
         <CreateOrderScreen
+          workTypes={workTypes}
           onSave={handleCreate}
           onCancel={() => setScreen('list')}
           onNavigate={setScreen}
@@ -899,6 +911,7 @@ export default function App() {
       {screen === 'detail' && selectedOrder && (
         <OrderDetailScreen
           order={selectedOrder}
+          technicians={technicians}
           onBack={() => setScreen('list')}
           onUpdate={handleUpdate}
           onNavigate={setScreen}
@@ -906,7 +919,7 @@ export default function App() {
         />
       )}
       {screen === 'reports' && (
-        <ReportsScreen orders={orders} onNavigate={setScreen} />
+        <ReportsScreen orders={orders} technicians={technicians} onNavigate={setScreen} />
       )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
