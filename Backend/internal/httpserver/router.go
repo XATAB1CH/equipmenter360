@@ -7,6 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/antondemidov/montazh360/internal/auth"
+	"github.com/antondemidov/montazh360/internal/domain"
+	"github.com/antondemidov/montazh360/internal/service"
 )
 
 // openapiSpec — встроенный в бинарь OpenAPI-контракт (api/oapi.yaml).
@@ -19,19 +23,42 @@ var openapiSpec []byte
 //
 // Все пути /api/* обрабатываются здесь; остальные отдают файлы из staticDir
 // (собранный фронт) с fallback на index.html для клиентского роутинга.
-func NewRouter(h *Handler, staticDir string) http.Handler {
+// jwt — менеджер токенов; svc нужен middleware для загрузки пользователя.
+func NewRouter(h *Handler, staticDir string, jwtMgr *auth.Manager, svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
-	// API (см. api/oapi.yaml).
-	mux.HandleFunc("GET /api/orders", h.listOrders)
-	mux.HandleFunc("POST /api/orders", h.createOrder)
-	mux.HandleFunc("PATCH /api/orders/{id}", h.updateOrder)
-	mux.HandleFunc("GET /api/meta", h.getMeta)
+	// Публичные ручки (без аутентификации).
 	mux.HandleFunc("GET /api/healthz", healthzHandler)
-
-	// OpenAPI-контракт и интерактивная документация.
+	mux.HandleFunc("POST /api/auth/login", h.login)
 	mux.HandleFunc("GET /api/openapi.yaml", openapiSpecHandler)
 	mux.HandleFunc("GET /api/docs", swaggerUIHandler)
+
+	// Защищённые ручки: JWT + роли.
+	dispatcherOnly := func(fn http.HandlerFunc) http.Handler {
+		return authMiddleware(jwtMgr, svc, requireRole(domain.RoleDispatcher)(fn))
+	}
+	anyAuth := func(fn http.HandlerFunc) http.Handler {
+		return authMiddleware(jwtMgr, svc, fn)
+	}
+
+	// Текущий пользователь.
+	mux.Handle("GET /api/auth/me", anyAuth(http.HandlerFunc(h.me)))
+
+	// Наряды: читать могут все аутентифицированные (роль фильтрует в service),
+	// создавать — только диспетчер, обновлять — диспетчер и монтажник (со своими).
+	mux.Handle("GET /api/orders", anyAuth(http.HandlerFunc(h.listOrders)))
+	mux.Handle("POST /api/orders", dispatcherOnly(http.HandlerFunc(h.createOrder)))
+	mux.Handle("PATCH /api/orders/{id}", anyAuth(http.HandlerFunc(h.updateOrder)))
+
+	// Монтажники: читать — все (для селектов), управлять — только диспетчер.
+	mux.Handle("GET /api/technicians", anyAuth(http.HandlerFunc(h.listTechnicians)))
+	mux.Handle("POST /api/technicians", dispatcherOnly(http.HandlerFunc(h.createTechnician)))
+	mux.Handle("PUT /api/technicians/{id}", dispatcherOnly(http.HandlerFunc(h.updateTechnician)))
+	mux.Handle("DELETE /api/technicians/{id}", dispatcherOnly(http.HandlerFunc(h.deleteTechnician)))
+
+	// Отчёты и справочники — все аутентифицированные.
+	mux.Handle("GET /api/reports/summary", anyAuth(http.HandlerFunc(h.reportSummary)))
+	mux.Handle("GET /api/meta", anyAuth(http.HandlerFunc(h.getMeta)))
 
 	// Статика фронта + SPA-fallback.
 	mux.Handle("/", spaHandler(staticDir))

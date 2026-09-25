@@ -8,16 +8,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type WorkOrder struct {
+type Technician struct {
 	ID        int64
-	Number    string
-	Address   string
-	WorkType  string
-	Client    string
+	FullName  string
 	Phone     string
-	Executor  *string
-	Date      pgtype.Date
-	Status    string
-	Comment   string
+	Active    bool
 	CreatedAt pgtype.Timestamptz
+}
+
+type User struct {
+	ID           int64
+	Login        string
+	PasswordHash string
+	FullName     string
+	Role         string
+	TechnicianID *int64
+	CreatedAt    pgtype.Timestamptz
+}
+
+type WorkOrder struct {
+	ID           int64
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	Date         pgtype.Date
+	Status       string
+	Comment      string
+	CreatedAt    pgtype.Timestamptz
+	TechnicianID *int64
 }

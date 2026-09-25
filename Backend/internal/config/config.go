@@ -15,6 +15,13 @@ import (
 type Config struct {
 	Server   Server   `yaml:"server"`
 	Database Database `yaml:"database"`
+	Auth     Auth     `yaml:"auth"`
+}
+
+// Auth — настройки аутентификации (JWT).
+type Auth struct {
+	Secret        string `yaml:"secret"`
+	TokenTTLHours int    `yaml:"tokenTtlHours"`
 }
 
 // Server — настройки HTTP-сервера.
@@ -87,6 +94,12 @@ func Load(path string) (*Config, error) {
 func (c *Config) validate() error {
 	if strings.TrimSpace(c.Server.Addr) == "" {
 		c.Server.Addr = ":8080"
+	}
+	if strings.TrimSpace(c.Auth.Secret) == "" {
+		c.Auth.Secret = "montazh360-dev-secret-change-me"
+	}
+	if c.Auth.TokenTTLHours <= 0 {
+		c.Auth.TokenTTLHours = 24
 	}
 	if strings.TrimSpace(c.Database.Host) == "" {
 		return fmt.Errorf("database.host обязателен")

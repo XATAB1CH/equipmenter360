@@ -27,7 +27,13 @@ func writeError(w http.ResponseWriter, err error) {
 	var ve *domain.ValidationError
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "наряд не найден"})
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "не найдено"})
+	case errors.Is(err, domain.ErrUnauthorized):
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "требуется аутентификация"})
+	case errors.Is(err, domain.ErrForbidden):
+		writeJSON(w, http.StatusForbidden, errorResponse{Error: "доступ запрещён"})
+	case errors.Is(err, domain.ErrConflict):
+		writeJSON(w, http.StatusConflict, errorResponse{Error: "операция конфликтует с текущими данными"})
 	case errors.As(err, &ve):
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: ve.Message})
 	default:
@@ -55,14 +61,14 @@ func decodeOrderUpdate(r *http.Request) (domain.OrderUpdate, error) {
 
 	var upd domain.OrderUpdate
 
-	if rawExec, ok := raw["executor"]; ok {
+	if rawExec, ok := raw["executorId"]; ok {
 		upd.ExecutorSet = true
 		if string(rawExec) != "null" {
-			var name string
-			if err := json.Unmarshal(rawExec, &name); err != nil {
-				return domain.OrderUpdate{}, domain.NewValidation("поле executor должно быть строкой или null")
+			var id int64
+			if err := json.Unmarshal(rawExec, &id); err != nil {
+				return domain.OrderUpdate{}, domain.NewValidation("поле executorId должно быть числом или null")
 			}
-			upd.Executor = &name
+			upd.ExecutorID = &id
 		}
 	}
 
@@ -78,7 +84,7 @@ func decodeOrderUpdate(r *http.Request) (domain.OrderUpdate, error) {
 	}
 
 	if len(raw) == 0 {
-		return domain.OrderUpdate{}, domain.NewValidation("тело запроса пустое: укажите executor и/или status")
+		return domain.OrderUpdate{}, domain.NewValidation("тело запроса пустое: укажите executorId и/или status")
 	}
 
 	return upd, nil

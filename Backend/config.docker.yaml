@@ -13,3 +13,7 @@ database:
   dbname: ${DB_NAME:montazh360}
   sslmode: ${DB_SSLMODE:disable}
   poolMaxConns: ${DB_POOL_MAX_CONNS:10}
+
+auth:
+  secret: ${JWT_SECRET:montazh360-dev-secret-change-me}
+  tokenTtlHours: ${JWT_TTL_HOURS:24}
