@@ -1,0 +1,15 @@
+# Конфигурация сервера «Монтаж 360» для запуска в контейнере.
+# Отличия от локального config.yaml: БД по имени сервиса `db`, статика из /app/static.
+
+server:
+  addr: ${ADDR::8080}
+  staticDir: ${STATIC_DIR:/app/static}   # собранный фронт, копируется в образ
+
+database:
+  host: ${DB_HOST:db}                    # имя сервиса в docker-compose сети
+  port: ${DB_PORT:5432}                  # внутренний порт Postgres в сети
+  user: ${DB_USER:montazh}
+  password: montazh
+  dbname: ${DB_NAME:montazh360}
+  sslmode: ${DB_SSLMODE:disable}
+  poolMaxConns: ${DB_POOL_MAX_CONNS:10}

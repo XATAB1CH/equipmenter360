@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	_ "embed"
 	"io/fs"
 	"net/http"
 	"os"
@@ -8,12 +9,17 @@ import (
 	"strings"
 )
 
+// openapiSpec — встроенный в бинарь OpenAPI-контракт (api/oapi.yaml).
+// Копия лежит рядом с этим файлом, чтобы работать в контейнере без исходников.
+//
+//go:embed oapi.yaml
+var openapiSpec []byte
+
 // NewRouter собирает маршруты API и раздачу статики фронта.
 //
 // Все пути /api/* обрабатываются здесь; остальные отдают файлы из staticDir
 // (собранный фронт) с fallback на index.html для клиентского роутинга.
-// specPath — путь к OpenAPI-контракту (api/oapi.yaml).
-func NewRouter(h *Handler, staticDir, specPath string) http.Handler {
+func NewRouter(h *Handler, staticDir string) http.Handler {
 	mux := http.NewServeMux()
 
 	// API (см. api/oapi.yaml).
@@ -24,7 +30,7 @@ func NewRouter(h *Handler, staticDir, specPath string) http.Handler {
 	mux.HandleFunc("GET /api/healthz", healthzHandler)
 
 	// OpenAPI-контракт и интерактивная документация.
-	mux.HandleFunc("GET /api/openapi.yaml", openapiSpecHandler(specPath))
+	mux.HandleFunc("GET /api/openapi.yaml", openapiSpecHandler)
 	mux.HandleFunc("GET /api/docs", swaggerUIHandler)
 
 	// Статика фронта + SPA-fallback.
@@ -33,12 +39,10 @@ func NewRouter(h *Handler, staticDir, specPath string) http.Handler {
 	return mux
 }
 
-// openapiSpecHandler отдаёт контракт API из файла api/oapi.yaml.
-func openapiSpecHandler(specPath string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-		http.ServeFile(w, r, specPath)
-	}
+// openapiSpecHandler отдаёт встроенный контракт API.
+func openapiSpecHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(openapiSpec)
 }
 
 // swaggerUIHandler отдаёт страницу Swagger UI, подключённую к /api/openapi.yaml.

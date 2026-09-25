@@ -4,7 +4,7 @@
 server:
   addr: ${ADDR::8080}              # адрес HTTP-сервера
   staticDir: ${STATIC_DIR:../Frontend/dist}  # папка со собранным фронтендом
-  openapiSpec: ${OPENAPI_SPEC:api/oapi.yaml} # путь к OpenAPI-контракту
+  # OpenAPI-контракт встроен в бинарь (go:embed), отдельный путь не нужен.
 
 database:
   host: ${DB_HOST:localhost}

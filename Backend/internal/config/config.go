@@ -19,9 +19,8 @@ type Config struct {
 
 // Server — настройки HTTP-сервера.
 type Server struct {
-	Addr        string `yaml:"addr"`
-	StaticDir   string `yaml:"staticDir"`
-	OpenAPISpec string `yaml:"openapiSpec"`
+	Addr      string `yaml:"addr"`
+	StaticDir string `yaml:"staticDir"`
 }
 
 // Database — настройки подключения к PostgreSQL.
@@ -47,15 +46,15 @@ func (d Database) DSN() string {
 	return dsn
 }
 
-// envPattern — ${VAR} или ${VAR:default}.
-var envPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?\}`)
+// envPattern — ${VAR}, ${VAR:default} или ${VAR:-default} (дефис — как в docker-compose).
+var envPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-?([^}]*))?\}`)
 
 // expandEnv подставляет переменные окружения в содержимое файла.
 func expandEnv(data []byte) []byte {
 	return envPattern.ReplaceAllFunc(data, func(match []byte) []byte {
 		parts := envPattern.FindSubmatch(match)
 		name := string(parts[1])
-		if val, ok := os.LookupEnv(name); ok {
+		if val, ok := os.LookupEnv(name); ok && val != "" {
 			return []byte(val)
 		}
 		if len(parts) > 2 && parts[2] != nil {
