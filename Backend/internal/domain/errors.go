@@ -4,10 +4,16 @@ import "errors"
 
 // Доменные ошибки. Транспортный слой сопоставляет их HTTP-статусам.
 var (
-	// ErrNotFound — наряд с таким id не найден (→ 404).
+	// ErrNotFound — сущность с таким id не найдена (→ 404).
 	ErrNotFound = errors.New("не найдено")
 	// ErrValidation — данные запроса не прошли валидацию (→ 400).
 	ErrValidation = errors.New("ошибка валидации")
+	// ErrConflict — конфликт, например удаление монтажника с нарядами (→ 409).
+	ErrConflict = errors.New("конфликт")
+	// ErrUnauthorized — не аутентифицирован (→ 401).
+	ErrUnauthorized = errors.New("не аутентифицирован")
+	// ErrForbidden — нет прав на операцию (→ 403).
+	ErrForbidden = errors.New("доступ запрещён")
 )
 
 // ValidationError — ошибка валидации с понятным сообщением для клиента.
@@ -17,8 +23,7 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string { return e.Message }
 
-// NewValidation создаёт ошибку валидации, обёрнутую в ErrValidation,
-// чтобы errors.Is(err, ErrValidation) возвращал true.
+// NewValidation создаёт ошибку валидации.
 func NewValidation(message string) error {
 	return &ValidationError{Message: message}
 }

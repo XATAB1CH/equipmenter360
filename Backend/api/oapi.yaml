@@ -1,29 +1,76 @@
 openapi: 3.0.3
 info:
   title: Монтаж 360 API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    JSON API системы управления нарядами для монтажных бригад «Монтаж 360».
+    JSON API системы управления нарядами «Монтаж 360».
 
-    Сервер отдаёт и этот API (префикс `/api`), и собранный фронтенд (все остальные пути).
-    В dev-режиме фронт проксирует `/api` на этот сервер (порт 8080).
+    **Аутентификация.** Все ручки, кроме `/api/healthz` и `/api/auth/login`, требуют JWT:
+    заголовок `Authorization: Bearer <token>`. Токен выдаёт `POST /api/auth/login`.
+
+    **Роли.**
+    - `dispatcher` — полный доступ (управление нарядами и монтажниками);
+    - `montazhnik` — видит только свои наряды, может менять их статус.
 servers:
   - url: /api
 tags:
+  - name: auth
+    description: Аутентификация и текущий пользователь
   - name: orders
     description: Наряды на монтажные работы
+  - name: technicians
+    description: Монтажники (CRUD)
+  - name: reports
+    description: Отчёты
   - name: meta
-    description: Справочники для выпадающих списков
+    description: Справочники
   - name: system
     description: Служебные ручки
 
 paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Вход (выдача JWT)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Токен и пользователь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: me
+      summary: Текущий пользователь
+      responses:
+        '200':
+          description: Пользователь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /orders:
     get:
       tags: [orders]
       operationId: listOrders
       summary: Список нарядов
-      description: Возвращает все наряды, новые сверху (по убыванию номера).
+      description: Диспетчер видит все, монтажник — только свои. Новые сверху.
       responses:
         '200':
           description: Список нарядов
@@ -33,13 +80,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/WorkOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags: [orders]
       operationId: createOrder
-      summary: Создать наряд
-      description: |
-        Создаёт наряд. Сервер сам проставляет `id` (следующий номер), `status = created`,
-        `executor = null` и `date` (текущая дата создания) — эти поля в запросе не передаются.
+      summary: Создать наряд (только диспетчер)
+      description: Сервер проставляет `id`, `status = created`, `executor = null` и `date`.
       requestBody:
         required: true
         content:
@@ -55,6 +102,8 @@ paths:
                 $ref: '#/components/schemas/WorkOrder'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /orders/{id}:
     patch:
@@ -62,12 +111,10 @@ paths:
       operationId: updateOrder
       summary: Обновить наряд
       description: |
-        Частичное обновление: назначение/снятие исполнителя и смена статуса.
-
-        Бизнес-правила (применяются на сервере):
-        - передан непустой `executor` → статус становится `assigned`;
-        - передан `executor: null` → исполнитель снимается, статус становится `created`;
-        - `status: cancelled` можно выставить из любого статуса.
+        Назначение/снятие исполнителя (только диспетчер) и смена статуса
+        (монтажник — только для своих нарядов).
+        - передан непустой `executorId` → статус `assigned`;
+        - передан `executorId: null` → исполнитель снят, статус `created`.
       parameters:
         - $ref: '#/components/parameters/OrderId'
       requestBody:
@@ -85,15 +132,127 @@ paths:
                 $ref: '#/components/schemas/WorkOrder'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /technicians:
+    get:
+      tags: [technicians]
+      operationId: listTechnicians
+      summary: Список монтажников
+      parameters:
+        - name: active
+          in: query
+          description: 'active=true — только действующие (для селектов)'
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Список монтажников
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Technician'
+    post:
+      tags: [technicians]
+      operationId: createTechnician
+      summary: Создать монтажника (только диспетчер)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianCreate'
+      responses:
+        '201':
+          description: Созданный монтажник
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Technician'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /technicians/{id}:
+    put:
+      tags: [technicians]
+      operationId: updateTechnician
+      summary: Обновить монтажника (только диспетчер)
+      parameters:
+        - $ref: '#/components/parameters/TechnicianId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianUpdate'
+      responses:
+        '200':
+          description: Обновлённый монтажник
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Technician'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [technicians]
+      operationId: deleteTechnician
+      summary: Удалить монтажника (только диспетчер)
+      description: Нельзя удалить монтажника, у которого есть наряды (409).
+      parameters:
+        - $ref: '#/components/parameters/TechnicianId'
+      responses:
+        '204':
+          description: Удалён
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /reports/summary:
+    get:
+      tags: [reports]
+      operationId: reportSummary
+      summary: Сводный отчёт за период
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-09-01'
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-09-30'
+      responses:
+        '200':
+          description: Отчёт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /meta:
     get:
       tags: [meta]
       operationId: getMeta
       summary: Справочники
-      description: Справочники типов работ и монтажников для выпадающих списков.
       responses:
         '200':
           description: Справочники
@@ -107,6 +266,7 @@ paths:
       tags: [system]
       operationId: healthz
       summary: Проверка живости
+      security: []
       responses:
         '200':
           description: Сервис жив
@@ -121,6 +281,12 @@ paths:
                 required: [status]
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   parameters:
     OrderId:
       name: id
@@ -130,6 +296,14 @@ components:
       schema:
         type: string
         example: '00142'
+    TechnicianId:
+      name: id
+      in: path
+      required: true
+      description: ID монтажника
+      schema:
+        type: integer
+        example: 4
 
   responses:
     BadRequest:
@@ -138,8 +312,26 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Не аутентифицирован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Нет прав на операцию
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     NotFound:
-      description: Наряд не найден
+      description: Не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Конфликт (например, удаление монтажника с нарядами)
       content:
         application/json:
           schema:
@@ -148,101 +340,177 @@ components:
   schemas:
     Status:
       type: string
-      description: Статус наряда
       enum: [created, assigned, inwork, done, cancelled]
+
+    Role:
+      type: string
+      enum: [dispatcher, montazhnik]
+
+    Credentials:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+          example: dispatcher
+        password:
+          type: string
+          example: password
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        login:
+          type: string
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        technicianId:
+          type: integer
+          nullable: true
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
 
     WorkOrder:
       type: object
-      description: Наряд на монтажные работы
       required: [id, address, workType, client, phone, executor, date, status, comment]
       properties:
         id:
           type: string
-          description: Номер наряда (zero-padded, 5 знаков)
           example: '00142'
         address:
           type: string
-          example: 'ул. Ленина, д. 42, кв. 18'
         workType:
           type: string
-          example: 'Подключение абонента'
         client:
           type: string
-          description: ФИО клиента или название организации
-          example: 'Смирнов Игорь Алексеевич'
         phone:
           type: string
-          example: '+7 900 123-45-67'
         executor:
           type: string
           nullable: true
-          description: ФИО монтажника или null, если не назначен
-          example: 'Иванов А.С.'
+          description: ФИО монтажника (null — не назначен)
+        executorId:
+          type: integer
+          nullable: true
+          description: ID монтажника
         date:
           type: string
           format: date
-          description: Дата создания наряда
-          example: '2026-09-22'
         status:
           $ref: '#/components/schemas/Status'
         comment:
           type: string
-          example: 'Клиент просит позвонить за час'
 
     OrderCreate:
       type: object
-      description: Данные для создания наряда (id/status/executor/date проставляет сервер)
       required: [address, workType, client, phone]
       properties:
         address:
           type: string
-          minLength: 1
-          example: 'ул. Ленина, д. 42, кв. 18'
         workType:
           type: string
-          minLength: 1
-          example: 'Подключение абонента'
         client:
           type: string
-          minLength: 1
-          example: 'Смирнов Игорь Алексеевич'
         phone:
           type: string
-          minLength: 1
-          example: '+7 900 123-45-67'
         comment:
           type: string
-          example: 'Домофон не работает'
 
     OrderUpdate:
       type: object
-      description: |
-        Частичное обновление наряда. Поля независимы; чтобы снять исполнителя,
-        передайте `executor: null` явно. Отсутствующие поля не меняются.
       properties:
-        executor:
-          type: string
+        executorId:
+          type: integer
           nullable: true
-          description: ФИО монтажника; null — снять исполнителя
-          example: 'Петров Д.Н.'
+          description: ID монтажника; null — снять исполнителя
         status:
           $ref: '#/components/schemas/Status'
 
+    Technician:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        phone:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date
+
+    TechnicianCreate:
+      type: object
+      required: [fullName]
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+
+    TechnicianUpdate:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        active:
+          type: boolean
+
     Meta:
       type: object
-      description: Справочники для выпадающих списков
-      required: [workTypes, technicians]
       properties:
         workTypes:
           type: array
           items:
             type: string
-          example: ['Монтаж кабеля', 'Замена оборудования', 'Диагностика']
-        technicians:
+
+    ReportSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        done:
+          type: integer
+        inwork:
+          type: integer
+        cancelled:
+          type: integer
+        created:
+          type: integer
+        assigned:
+          type: integer
+        byTechnician:
           type: array
           items:
-            type: string
-          example: ['Иванов А.С.', 'Петров Д.Н.']
+            $ref: '#/components/schemas/TechLoad'
+
+    TechLoad:
+      type: object
+      properties:
+        technicianId:
+          type: integer
+        fullName:
+          type: string
+        total:
+          type: integer
+        done:
+          type: integer
+        inwork:
+          type: integer
 
     Error:
       type: object
@@ -250,5 +518,6 @@ components:
       properties:
         error:
           type: string
-          description: Человекочитаемое описание ошибки
-          example: 'поле address обязательно'
+
+security:
+  - bearerAuth: []

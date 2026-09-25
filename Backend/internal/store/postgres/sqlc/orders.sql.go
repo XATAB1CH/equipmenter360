@@ -12,7 +12,7 @@ import (
 )
 
 const createOrder = `-- name: CreateOrder :one
-insert into work_orders (number, address, work_type, client, phone, executor, date, status, comment)
+insert into work_orders (number, address, work_type, client, phone, technician_id, date, status, comment)
 values ($1,
         $2,
         $3,
@@ -22,31 +22,31 @@ values ($1,
         $7,
         $8,
         $9)
-returning number, address, work_type, client, phone, executor, date, status, comment
+returning number, address, work_type, client, phone, technician_id, date, status, comment
 `
 
 type CreateOrderParams struct {
-	Number   string
-	Address  string
-	WorkType string
-	Client   string
-	Phone    string
-	Executor *string
-	Date     pgtype.Date
-	Status   string
-	Comment  string
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Date         pgtype.Date
+	Status       string
+	Comment      string
 }
 
 type CreateOrderRow struct {
-	Number   string
-	Address  string
-	WorkType string
-	Client   string
-	Phone    string
-	Executor *string
-	Date     pgtype.Date
-	Status   string
-	Comment  string
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Date         pgtype.Date
+	Status       string
+	Comment      string
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (*CreateOrderRow, error) {
@@ -56,7 +56,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (*Crea
 		arg.WorkType,
 		arg.Client,
 		arg.Phone,
-		arg.Executor,
+		arg.TechnicianID,
 		arg.Date,
 		arg.Status,
 		arg.Comment,
@@ -68,7 +68,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (*Crea
 		&i.WorkType,
 		&i.Client,
 		&i.Phone,
-		&i.Executor,
+		&i.TechnicianID,
 		&i.Date,
 		&i.Status,
 		&i.Comment,
@@ -77,21 +77,25 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (*Crea
 }
 
 const getOrder = `-- name: GetOrder :one
-select number, address, work_type, client, phone, executor, date, status, comment
-from work_orders
-where number = $1
+select wo.number, wo.address, wo.work_type, wo.client, wo.phone,
+       wo.technician_id, t.full_name as executor,
+       wo.date, wo.status, wo.comment
+from work_orders wo
+left join technicians t on t.id = wo.technician_id
+where wo.number = $1
 `
 
 type GetOrderRow struct {
-	Number   string
-	Address  string
-	WorkType string
-	Client   string
-	Phone    string
-	Executor *string
-	Date     pgtype.Date
-	Status   string
-	Comment  string
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Executor     *string
+	Date         pgtype.Date
+	Status       string
+	Comment      string
 }
 
 func (q *Queries) GetOrder(ctx context.Context, number string) (*GetOrderRow, error) {
@@ -103,6 +107,7 @@ func (q *Queries) GetOrder(ctx context.Context, number string) (*GetOrderRow, er
 		&i.WorkType,
 		&i.Client,
 		&i.Phone,
+		&i.TechnicianID,
 		&i.Executor,
 		&i.Date,
 		&i.Status,
@@ -112,23 +117,29 @@ func (q *Queries) GetOrder(ctx context.Context, number string) (*GetOrderRow, er
 }
 
 const listOrders = `-- name: ListOrders :many
-select number, address, work_type, client, phone, executor, date, status, comment
-from work_orders
-order by number desc
+
+select wo.number, wo.address, wo.work_type, wo.client, wo.phone,
+       wo.technician_id, t.full_name as executor,
+       wo.date, wo.status, wo.comment
+from work_orders wo
+left join technicians t on t.id = wo.technician_id
+order by wo.number desc
 `
 
 type ListOrdersRow struct {
-	Number   string
-	Address  string
-	WorkType string
-	Client   string
-	Phone    string
-	Executor *string
-	Date     pgtype.Date
-	Status   string
-	Comment  string
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Executor     *string
+	Date         pgtype.Date
+	Status       string
+	Comment      string
 }
 
+// Наряды. executor — ФИО монтажника через LEFT JOIN (null, если не назначен).
 func (q *Queries) ListOrders(ctx context.Context) ([]*ListOrdersRow, error) {
 	rows, err := q.db.Query(ctx, listOrders)
 	if err != nil {
@@ -144,6 +155,62 @@ func (q *Queries) ListOrders(ctx context.Context) ([]*ListOrdersRow, error) {
 			&i.WorkType,
 			&i.Client,
 			&i.Phone,
+			&i.TechnicianID,
+			&i.Executor,
+			&i.Date,
+			&i.Status,
+			&i.Comment,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrdersByTechnician = `-- name: ListOrdersByTechnician :many
+select wo.number, wo.address, wo.work_type, wo.client, wo.phone,
+       wo.technician_id, t.full_name as executor,
+       wo.date, wo.status, wo.comment
+from work_orders wo
+left join technicians t on t.id = wo.technician_id
+where wo.technician_id = $1
+order by wo.number desc
+`
+
+type ListOrdersByTechnicianRow struct {
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Executor     *string
+	Date         pgtype.Date
+	Status       string
+	Comment      string
+}
+
+// Наряды конкретного монтажника (для роли montazhnik).
+func (q *Queries) ListOrdersByTechnician(ctx context.Context, technicianID *int64) ([]*ListOrdersByTechnicianRow, error) {
+	rows, err := q.db.Query(ctx, listOrdersByTechnician, technicianID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*ListOrdersByTechnicianRow{}
+	for rows.Next() {
+		var i ListOrdersByTechnicianRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.Address,
+			&i.WorkType,
+			&i.Client,
+			&i.Phone,
+			&i.TechnicianID,
 			&i.Executor,
 			&i.Date,
 			&i.Status,
@@ -174,32 +241,32 @@ func (q *Queries) NextOrderNumber(ctx context.Context) (string, error) {
 
 const updateOrder = `-- name: UpdateOrder :one
 update work_orders
-set executor = $1,
-    status   = $2
+set technician_id = $1,
+    status        = $2
 where number = $3
-returning number, address, work_type, client, phone, executor, date, status, comment
+returning number, address, work_type, client, phone, technician_id, date, status, comment
 `
 
 type UpdateOrderParams struct {
-	Executor *string
-	Status   string
-	Number   string
+	TechnicianID *int64
+	Status       string
+	Number       string
 }
 
 type UpdateOrderRow struct {
-	Number   string
-	Address  string
-	WorkType string
-	Client   string
-	Phone    string
-	Executor *string
-	Date     pgtype.Date
-	Status   string
-	Comment  string
+	Number       string
+	Address      string
+	WorkType     string
+	Client       string
+	Phone        string
+	TechnicianID *int64
+	Date         pgtype.Date
+	Status       string
+	Comment      string
 }
 
 func (q *Queries) UpdateOrder(ctx context.Context, arg UpdateOrderParams) (*UpdateOrderRow, error) {
-	row := q.db.QueryRow(ctx, updateOrder, arg.Executor, arg.Status, arg.Number)
+	row := q.db.QueryRow(ctx, updateOrder, arg.TechnicianID, arg.Status, arg.Number)
 	var i UpdateOrderRow
 	err := row.Scan(
 		&i.Number,
@@ -207,7 +274,7 @@ func (q *Queries) UpdateOrder(ctx context.Context, arg UpdateOrderParams) (*Upda
 		&i.WorkType,
 		&i.Client,
 		&i.Phone,
-		&i.Executor,
+		&i.TechnicianID,
 		&i.Date,
 		&i.Status,
 		&i.Comment,

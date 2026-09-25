@@ -1,6 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
+/* Тёмная тема включается классом .dark на <html>, а не prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --color-bg: #F5F6F8;
@@ -24,15 +27,40 @@
   --color-status-cancelled-bg: #FEE2E2;
 }
 
+/* Тёмная тема: включается классом .dark на <html>.
+   Переопределяем палитру — компоненты используют utility-классы из @theme. */
+.dark {
+  --color-bg: #0F1115;
+  --color-surface: #171A21;
+  --color-border: #2A2F3A;
+  --color-muted: #6B7280;
+  --color-text: #E7E9EE;
+  --color-text-secondary: #A6ACBA;
+  --color-accent: #5B7CFF;
+  --color-accent-hover: #3D5BF0;
+  --color-accent-light: #1E2742;
+  --color-status-created: #9AA0AC;
+  --color-status-created-bg: #23262E;
+  --color-status-assigned: #7D97FF;
+  --color-status-assigned-bg: #1E2742;
+  --color-status-inwork: #F0A93C;
+  --color-status-inwork-bg: #3A2C12;
+  --color-status-done: #34D399;
+  --color-status-done-bg: #0E2E22;
+  --color-status-cancelled: #F87171;
+  --color-status-cancelled-bg: #3A1616;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #F5F6F8;
-  color: #1A1D23;
+  background-color: var(--color-bg);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  transition: background-color .2s ease, color .2s ease;
 }
 
 /* Hide scrollbar by default, show on hover */
